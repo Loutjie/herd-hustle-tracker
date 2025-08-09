@@ -14,7 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cattle_transactions: {
+        Row: {
+          average_weight_kg: number | null
+          breed: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          occurred_on: string
+          price_per_head: number
+          quantity: number
+          total_amount: number
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          average_weight_kg?: number | null
+          breed?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          price_per_head: number
+          quantity: number
+          total_amount: number
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          average_weight_kg?: number | null
+          breed?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          price_per_head?: number
+          quantity?: number
+          total_amount?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      input_costs: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          occurred_on: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          occurred_on?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          occurred_on?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
