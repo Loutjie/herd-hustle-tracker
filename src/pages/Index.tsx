@@ -22,6 +22,26 @@ const Index = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
+                Dashboard
+              </CardTitle>
+              <CardDescription>
+                View farm performance and metrics
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Get insights into your cattle count, costs, and profit & loss for the year.
+              </p>
+              <Link to="/dashboard">
+                <Button className="w-full">View Dashboard</Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Beef className="h-5 w-5 text-primary" />
                 Cattle Transactions
               </CardTitle>
               <CardDescription>
@@ -33,7 +53,7 @@ const Index = () => {
                 Record purchases and sales with detailed information including breed, weight, and pricing.
               </p>
               <Link to="/transactions">
-                <Button className="w-full">Manage Transactions</Button>
+                <Button variant="outline" className="w-full">Manage Transactions</Button>
               </Link>
             </CardContent>
           </Card>
@@ -55,34 +75,6 @@ const Index = () => {
               <Link to="/costs">
                 <Button variant="outline" className="w-full">Manage Costs</Button>
               </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow md:col-span-2 lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-primary" />
-                Quick Stats
-              </CardTitle>
-              <CardDescription>
-                Farm overview at a glance
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Total Cattle:</span>
-                  <span className="font-medium">-</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Monthly Costs:</span>
-                  <span className="font-medium">-</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Net Position:</span>
-                  <span className="font-medium">-</span>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
