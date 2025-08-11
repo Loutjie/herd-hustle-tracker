@@ -176,7 +176,7 @@ const Costs = () => {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="z-50 bg-popover text-popover-foreground">
                             {COST_CATEGORIES.map((category) => (
                               <SelectItem key={category} value={category}>
                                 {category}

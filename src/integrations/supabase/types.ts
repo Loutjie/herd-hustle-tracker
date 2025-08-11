@@ -17,6 +17,7 @@ export type Database = {
       cattle_transactions: {
         Row: {
           average_weight_kg: number | null
+          batch_id: string | null
           breed: string | null
           created_at: string
           id: string
@@ -31,6 +32,7 @@ export type Database = {
         }
         Insert: {
           average_weight_kg?: number | null
+          batch_id?: string | null
           breed?: string | null
           created_at?: string
           id?: string
@@ -45,6 +47,7 @@ export type Database = {
         }
         Update: {
           average_weight_kg?: number | null
+          batch_id?: string | null
           breed?: string | null
           created_at?: string
           id?: string
@@ -94,7 +97,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      available_batches: {
+        Row: {
+          average_weight_kg: number | null
+          batch_id: string | null
+          breed: string | null
+          price_per_head: number | null
+          purchase_date: string | null
+          purchase_notes: string | null
+          purchased_quantity: number | null
+          remaining_quantity: number | null
+          sold_quantity: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

@@ -16,15 +16,26 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-const transactionSchema = z.object({
-  type: z.enum(["buy", "sell"]),
-  quantity: z.string().min(1, "Quantity is required"),
-  price_per_head: z.string().min(1, "Price per head is required"),
-  breed: z.string().optional(),
-  average_weight_kg: z.string().optional(),
-  occurred_on: z.string().min(1, "Date is required"),
-  notes: z.string().optional(),
-});
+const transactionSchema = z
+  .object({
+    type: z.enum(["buy", "sell"]),
+    quantity: z.string().min(1, "Quantity is required"),
+    price_per_head: z.string().min(1, "Price per head is required"),
+    breed: z.string().optional(),
+    average_weight_kg: z.string().optional(),
+    occurred_on: z.string().min(1, "Date is required"),
+    notes: z.string().optional(),
+    batch_id: z.string().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type === "sell" && !val.batch_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Please select a batch for the sale",
+        path: ["batch_id"],
+      });
+    }
+  });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
 
@@ -40,10 +51,20 @@ interface Transaction {
   notes?: string;
 }
 
+interface AvailableBatch {
+  batch_id: string;
+  purchase_date: string;
+  breed: string | null;
+  purchased_quantity: number;
+  sold_quantity: number;
+  remaining_quantity: number;
+}
+
 const Transactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [batches, setBatches] = useState<AvailableBatch[]>([]);
   const { toast } = useToast();
 
   const form = useForm<TransactionFormData>({
@@ -56,8 +77,11 @@ const Transactions = () => {
       average_weight_kg: "",
       occurred_on: new Date().toISOString().split('T')[0],
       notes: "",
+      batch_id: "",
     },
   });
+
+  const typeValue = form.watch("type");
 
   const fetchTransactions = async () => {
     try {
@@ -79,9 +103,18 @@ const Transactions = () => {
     }
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
+  const fetchAvailableBatches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('available_batches')
+        .select('*')
+        .order('purchase_date', { ascending: false });
+      if (error) throw error;
+      setBatches(data || []);
+    } catch (error) {
+      // Silent fail for batches; surfaced in UI when selling
+    }
+  };
 
   const onSubmit = async (data: TransactionFormData) => {
     setSubmitting(true);
@@ -90,6 +123,24 @@ const Transactions = () => {
       const pricePerHead = parseFloat(data.price_per_head);
       const totalAmount = quantity * pricePerHead;
       const averageWeight = data.average_weight_kg ? parseFloat(data.average_weight_kg) : null;
+
+      const selectedBatch = data.type === 'sell'
+        ? batches.find(b => b.batch_id === data.batch_id)
+        : undefined;
+
+      if (data.type === 'sell') {
+        if (!data.batch_id || !selectedBatch) {
+          throw new Error('Please select a batch');
+        }
+        if (quantity > selectedBatch.remaining_quantity) {
+          toast({
+            title: "Invalid quantity",
+            description: `You can only sell up to ${selectedBatch.remaining_quantity} from this batch`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
 
       const { error } = await supabase
         .from('cattle_transactions')
@@ -103,7 +154,9 @@ const Transactions = () => {
           occurred_on: data.occurred_on,
           notes: data.notes || null,
           user_id: (await supabase.auth.getUser()).data.user?.id,
+          batch_id: data.type === 'sell' ? data.batch_id : null,
         });
+
 
       if (error) throw error;
 
@@ -114,6 +167,7 @@ const Transactions = () => {
 
       form.reset();
       fetchTransactions();
+      fetchAvailableBatches();
     } catch (error) {
       toast({
         title: "Error",
@@ -149,7 +203,7 @@ const Transactions = () => {
                 <Plus className="h-5 w-5" />
                 Add Transaction
               </CardTitle>
-              <CardDescription>Record a new cattle purchase or sale</CardDescription>
+                <CardDescription>Record a new cattle purchase or sale (choose a batch for sales)</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...form}>
@@ -160,13 +214,16 @@ const Transactions = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Transaction Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={(v) => {
+                          field.onChange(v);
+                          if (v === 'sell') fetchAvailableBatches();
+                        }} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="z-50 bg-popover text-popover-foreground">
                             <SelectItem value="buy">Buy</SelectItem>
                             <SelectItem value="sell">Sell</SelectItem>
                           </SelectContent>
@@ -175,6 +232,38 @@ const Transactions = () => {
                       </FormItem>
                     )}
                   />
+
+                  {typeValue === 'sell' && (
+                    <FormField
+                      control={form.control}
+                      name="batch_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Batch for Sale</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={batches.length ? "Select a batch" : "No batches available"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="z-50 bg-popover text-popover-foreground max-h-72">
+                              {batches.length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">No available batches</div>
+                              ) : (
+                                batches.map((b) => (
+                                  <SelectItem key={b.batch_id} value={b.batch_id}>
+                                    {new Date(b.purchase_date).toLocaleDateString()} · {b.breed || 'Mixed'} · Rem: {b.remaining_quantity}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
@@ -305,7 +394,7 @@ const Transactions = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>{transaction.quantity}</TableCell>
-                          <TableCell>${transaction.total_amount.toFixed(2)}</TableCell>
+                          <TableCell>${Number(transaction.total_amount).toFixed(2)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
