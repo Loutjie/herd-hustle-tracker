@@ -119,6 +119,17 @@ const Transactions = () => {
   const onSubmit = async (data: TransactionFormData) => {
     setSubmitting(true);
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      if (!user) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to add a transaction.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const quantity = parseInt(data.quantity);
       const pricePerHead = parseFloat(data.price_per_head);
       const totalAmount = quantity * pricePerHead;
@@ -153,7 +164,7 @@ const Transactions = () => {
           average_weight_kg: averageWeight,
           occurred_on: data.occurred_on,
           notes: data.notes || null,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
+          user_id: user.id,
           batch_id: data.type === 'sell' ? data.batch_id : null,
         });
 
@@ -178,7 +189,6 @@ const Transactions = () => {
       setSubmitting(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">

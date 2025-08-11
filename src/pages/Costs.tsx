@@ -88,6 +88,17 @@ const Costs = () => {
   const onSubmit = async (data: CostFormData) => {
     setSubmitting(true);
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      if (!user) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to add a cost.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const amount = parseFloat(data.amount);
 
       const { error } = await supabase
@@ -97,7 +108,7 @@ const Costs = () => {
           amount,
           occurred_on: data.occurred_on,
           description: data.description || null,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
+          user_id: user.id,
         });
 
       if (error) throw error;
