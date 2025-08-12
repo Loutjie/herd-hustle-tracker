@@ -8,9 +8,14 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-3">
-            <Beef className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold text-foreground">Cattle Farm Manager</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Beef className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">Cattle Farm Manager</h1>
+            </div>
+            <Link to="/auth">
+              <Button variant="ghost">Sign in</Button>
+            </Link>
           </div>
           <p className="text-muted-foreground mt-2">Track your cattle transactions and farm expenses</p>
         </div>

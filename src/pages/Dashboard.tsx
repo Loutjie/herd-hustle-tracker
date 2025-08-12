@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { supabase } from '@/integrations/supabase/client'
 
 export default function Dashboard() {
   const [data, setData] = useState<any[]>([])
@@ -7,11 +7,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: cattle, error } = await supabase.from('cattle').select('*')
+      const { data: transactions, error } = await supabase.from('cattle_transactions').select('*').order('occurred_on', { ascending: false })
       if (error) {
         console.error(error)
       } else {
-        setData(cattle)
+        setData(transactions)
       }
       setLoading(false)
     }
@@ -25,13 +25,15 @@ export default function Dashboard() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Cattle Records</h1>
+      <h1 className="text-2xl font-bold mb-4">Recent Transactions</h1>
       {data.length === 0 ? (
-        <p>No cattle found.</p>
+        <p>No transactions found.</p>
       ) : (
-        <ul>
-          {data.map((cow) => (
-            <li key={cow.id}>{cow.name}</li>
+        <ul className="space-y-2">
+          {data.map((t: any) => (
+            <li key={t.id} className="text-sm">
+              {new Date(t.occurred_on).toLocaleDateString()} · {t.type} · {t.quantity} head · ${Number(t.total_amount).toFixed(2)}
+            </li>
           ))}
         </ul>
       )}
