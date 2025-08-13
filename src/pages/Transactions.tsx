@@ -18,13 +18,28 @@ import * as z from "zod";
 
 const transactionSchema = z.object({
   type: z.enum(["buy", "sell"]),
-  quantity: z.string().min(1, "Quantity is required"),
-  price_per_head: z.string().min(1, "Price per head is required"),
+  quantity: z.string().optional(),
+  price_per_head: z.string().optional(),
+  total_sale_price: z.string().optional(),
   breed: z.string().optional(),
   average_weight_kg: z.string().optional(),
   occurred_on: z.string().min(1, "Date is required"),
   notes: z.string().optional(),
   input_cost_deduction: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (val.type === "buy") {
+    if (!val.quantity || String(val.quantity).trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Quantity is required", path: ["quantity"] });
+    }
+    if (!val.price_per_head || String(val.price_per_head).trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Price per head is required", path: ["price_per_head"] });
+    }
+  }
+  if (val.type === "sell") {
+    if (!val.total_sale_price || String(val.total_sale_price).trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Total sale price is required", path: ["total_sale_price"] });
+    }
+  }
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -68,6 +83,7 @@ const { toast } = useToast();
       type: "buy",
       quantity: "",
       price_per_head: "",
+      total_sale_price: "",
       breed: "",
       average_weight_kg: "",
       occurred_on: new Date().toISOString().split('T')[0],
@@ -168,10 +184,9 @@ const { toast } = useToast();
         return;
       }
 
-      const quantity = parseInt(data.quantity);
-      const pricePerHead = parseFloat(data.price_per_head);
-      const totalAmount = quantity * pricePerHead;
-      const averageWeight = data.average_weight_kg ? parseFloat(data.average_weight_kg) : null;
+      let quantity = 0;
+      let pricePerHead = 0;
+      let totalAmount = 0;
       const inputDeduction = data.input_cost_deduction ? parseFloat(data.input_cost_deduction) : 0;
 
       if (data.type === 'sell') {
@@ -184,9 +199,9 @@ const { toast } = useToast();
           return;
         }
 
-        const totalAllocated = allocations.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
-        if (totalAllocated !== quantity) {
-          toast({ title: "Quantity mismatch", description: `Allocated (${totalAllocated}) must equal sale quantity (${quantity}).`, variant: "destructive" });
+        const saleQuantity = allocations.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
+        if (saleQuantity <= 0) {
+          toast({ title: "Quantity required", description: "Enter allocation quantities.", variant: "destructive" });
           return;
         }
 
@@ -212,7 +227,29 @@ const { toast } = useToast();
           toast({ title: "Exceeds unaccounted costs", description: "Reduce the deduction amount.", variant: "destructive" });
           return;
         }
+
+        const totalSalePrice = data.total_sale_price ? parseFloat(data.total_sale_price) : NaN;
+        if (isNaN(totalSalePrice) || totalSalePrice <= 0) {
+          toast({ title: "Total sale price required", description: "Enter a valid total sale price.", variant: "destructive" });
+          return;
+        }
+
+        quantity = saleQuantity;
+        totalAmount = totalSalePrice;
+        pricePerHead = totalSalePrice / saleQuantity;
+      } else {
+        const q = parseInt(data.quantity || '0');
+        const pph = parseFloat(data.price_per_head || '0');
+        if (!q || !pph) {
+          toast({ title: "Invalid purchase", description: "Quantity and price per head are required.", variant: "destructive" });
+          return;
+        }
+        quantity = q;
+        pricePerHead = pph;
+        totalAmount = q * pph;
       }
+
+      const averageWeight = data.type === 'buy' && data.average_weight_kg ? parseFloat(data.average_weight_kg) : null;
 
       // Insert transaction
       const { data: inserted, error: insertErr } = await supabase
@@ -222,7 +259,7 @@ const { toast } = useToast();
           quantity,
           price_per_head: pricePerHead,
           total_amount: totalAmount,
-          breed: data.breed || null,
+          breed: data.type === 'buy' ? (data.breed || null) : null,
           average_weight_kg: averageWeight,
           occurred_on: data.occurred_on,
           notes: data.notes || null,
@@ -376,7 +413,7 @@ const { toast } = useToast();
                                       const adjAvailable = Math.max(0, Number(b.remaining_quantity || 0) - Number(allocSums[b.batch_id] || 0) - currentRowOtherQty);
                                       return (
                                         <SelectItem key={b.batch_id} value={b.batch_id}>
-                                          {new Date(b.purchase_date).toLocaleDateString()} · {b.breed || 'Mixed'} · Rem: {adjAvailable}
+                                          {b.breed || 'Mixed'} · Price/Head: ${Number(b.price_per_head || 0).toFixed(2)} · Rem: {adjAvailable}
                                         </SelectItem>
                                       );
                                     })
@@ -428,69 +465,87 @@ const { toast } = useToast();
                           </FormItem>
                         )}
                       />
+
+                      <FormField
+                        control={form.control}
+                        name="total_sale_price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Total sale price</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0.00" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   )}
 
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="quantity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Quantity</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Number of cattle" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {typeValue !== 'sell' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="quantity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quantity</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Number of cattle" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="price_per_head"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price per Head</FormLabel>
-                          <FormControl>
-                            <Input placeholder="0.00" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                      <FormField
+                        control={form.control}
+                        name="price_per_head"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Price per Head</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0.00" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="breed"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Breed (Optional)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., Angus, Holstein" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {typeValue !== 'sell' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="breed"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Breed (Optional)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g., Angus, Holstein" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="average_weight_kg"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Avg Weight (kg)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="0.0" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                      <FormField
+                        control={form.control}
+                        name="average_weight_kg"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Avg Weight (kg)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0.0" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
 
                   <FormField
                     control={form.control}
