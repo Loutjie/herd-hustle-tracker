@@ -21,6 +21,7 @@ export type Database = {
           breed: string | null
           created_at: string
           id: string
+          input_cost_deduction: number
           notes: string | null
           occurred_on: string
           price_per_head: number
@@ -36,6 +37,7 @@ export type Database = {
           breed?: string | null
           created_at?: string
           id?: string
+          input_cost_deduction?: number
           notes?: string | null
           occurred_on?: string
           price_per_head: number
@@ -51,6 +53,7 @@ export type Database = {
           breed?: string | null
           created_at?: string
           id?: string
+          input_cost_deduction?: number
           notes?: string | null
           occurred_on?: string
           price_per_head?: number
@@ -94,6 +97,68 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      sale_batch_allocations: {
+        Row: {
+          cost_per_head: number
+          created_at: string
+          id: string
+          purchase_transaction_id: string
+          quantity: number
+          sale_transaction_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost_per_head: number
+          created_at?: string
+          id?: string
+          purchase_transaction_id: string
+          quantity: number
+          sale_transaction_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost_per_head?: number
+          created_at?: string
+          id?: string
+          purchase_transaction_id?: string
+          quantity?: number
+          sale_transaction_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_purchase_txn"
+            columns: ["purchase_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "available_batches"
+            referencedColumns: ["batch_id"]
+          },
+          {
+            foreignKeyName: "fk_purchase_txn"
+            columns: ["purchase_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "cattle_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sale_txn"
+            columns: ["sale_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "available_batches"
+            referencedColumns: ["batch_id"]
+          },
+          {
+            foreignKeyName: "fk_sale_txn"
+            columns: ["sale_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "cattle_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
