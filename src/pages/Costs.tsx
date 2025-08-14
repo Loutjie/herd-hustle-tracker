@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, DollarSign } from "lucide-react";
+import { ArrowLeft, Plus, DollarSign, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -158,6 +158,14 @@ const Costs = () => {
             </Link>
             <DollarSign className="h-6 w-6 text-primary" />
             <h1 className="text-2xl font-bold text-foreground">Input Costs</h1>
+            <div className="ml-auto">
+              <Link to="/csv-import">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>

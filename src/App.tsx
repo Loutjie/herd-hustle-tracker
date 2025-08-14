@@ -5,6 +5,7 @@ import Index from './pages/Index'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Costs from './pages/Costs'
+import CsvImport from './pages/CsvImport'
 import NotFound from './pages/NotFound'
 import AuthPage from './pages/AuthPage'
 
@@ -40,6 +41,7 @@ export default function App() {
       <Route path="/dashboard" element={PrivateRoute(<Dashboard />)} />
       <Route path="/transactions" element={PrivateRoute(<Transactions />)} />
       <Route path="/costs" element={PrivateRoute(<Costs />)} />
+      <Route path="/csv-import" element={PrivateRoute(<CsvImport />)} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   )
