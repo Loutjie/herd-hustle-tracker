@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Beef, ShoppingCart, Coins, TrendingUp } from 'lucide-react'
+import { Beef, ShoppingCart, Coins, TrendingUp, Package } from 'lucide-react'
 import {
   addDays,
   eachDayOfInterval,
@@ -21,6 +22,7 @@ export default function Dashboard() {
 
   const [transactions, setTransactions] = useState<any[]>([])
   const [costs, setCosts] = useState<any[]>([])
+  const [batches, setBatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<RangeKey>('last30')
 
@@ -64,7 +66,7 @@ export default function Dashboard() {
       const startStr = format(start, 'yyyy-MM-dd')
       const endStr = format(end, 'yyyy-MM-dd')
 
-      const [txRes, costRes] = await Promise.all([
+      const [txRes, costRes, batchRes] = await Promise.all([
         supabase
           .from('cattle_transactions')
           .select('*')
@@ -77,13 +79,19 @@ export default function Dashboard() {
           .gte('occurred_on', startStr)
           .lte('occurred_on', endStr)
           .order('occurred_on', { ascending: true }),
+        supabase
+          .from('available_batches')
+          .select('*')
+          .order('purchase_date', { ascending: false })
       ])
 
       if (txRes.error) console.error(txRes.error)
       if (costRes.error) console.error(costRes.error)
+      if (batchRes.error) console.error(batchRes.error)
 
       setTransactions(txRes.data || [])
       setCosts(costRes.data || [])
+      setBatches(batchRes.data || [])
       setLoading(false)
     }
 
@@ -98,28 +106,31 @@ export default function Dashboard() {
     const totalSoldHead = sells.reduce((sum, t) => sum + Number(t.quantity || 0), 0)
     const netCattle = totalPurchasedHead - totalSoldHead
 
-    const totalPurchasePrice = buys.reduce((sum, t) => sum + Number(t.total_amount || 0), 0)
+    // Only include cattle costs when cattle are sold (from sale_batch_allocations)
     const salesRevenue = sells.reduce((sum, t) => sum + Number(t.total_amount || 0), 0)
     const inputCostTotal = costs.reduce((sum, c) => sum + Number(c.amount || 0), 0)
+    const inputCostDeductions = sells.reduce((sum, t) => sum + Number(t.input_cost_deduction || 0), 0)
 
-    const unaccountedInputCosts = Math.max(inputCostTotal - salesRevenue, 0)
-    const pnl = salesRevenue - totalPurchasePrice - inputCostTotal
+    // PnL only includes costs from input_costs and input_cost_deductions on sales
+    const pnl = salesRevenue - inputCostTotal - inputCostDeductions
 
-    return { netCattle, totalPurchasePrice, unaccountedInputCosts, pnl, salesRevenue, inputCostTotal }
+    return { netCattle, salesRevenue, inputCostTotal, inputCostDeductions, pnl }
   }, [transactions, costs])
 
   const chartData = useMemo(() => {
     const days = eachDayOfInterval({ start, end })
 
     // Build daily maps
-    const buyMap: Record<string, number> = {}
     const sellMap: Record<string, number> = {}
     const costMap: Record<string, number> = {}
+    const deductionMap: Record<string, number> = {}
 
     transactions.forEach((t) => {
       const key = String(t.occurred_on)
-      if (t.type === 'buy') buyMap[key] = (buyMap[key] || 0) + Number(t.total_amount || 0)
-      if (t.type === 'sell') sellMap[key] = (sellMap[key] || 0) + Number(t.total_amount || 0)
+      if (t.type === 'sell') {
+        sellMap[key] = (sellMap[key] || 0) + Number(t.total_amount || 0)
+        deductionMap[key] = (deductionMap[key] || 0) + Number(t.input_cost_deduction || 0)
+      }
     })
     costs.forEach((c) => {
       const key = String(c.occurred_on)
@@ -130,17 +141,17 @@ export default function Dashboard() {
 
     return days.map((d) => {
       const key = format(d, 'yyyy-MM-dd')
-      const purchases = buyMap[key] || 0
       const sales = sellMap[key] || 0
       const inputs = costMap[key] || 0
-      // Daily PnL
-      const daily = sales - purchases - inputs
+      const deductions = deductionMap[key] || 0
+      // Daily PnL (excluding cattle purchase costs)
+      const daily = sales - inputs - deductions
       cumulative += daily
       return {
         date: format(d, 'MMM d'),
-        purchases,
         sales,
         inputs,
+        deductions,
         pnl: cumulative,
       }
     })
@@ -194,27 +205,27 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Purchase Price</CardTitle>
+              <CardTitle className="text-sm font-medium">Sales Revenue</CardTitle>
               <ShoppingCart className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{currency(metrics.totalPurchasePrice)}</div>
+              <div className="text-2xl font-bold">{currency(metrics.salesRevenue)}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Unaccounted Input Costs</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Input Costs</CardTitle>
               <Coins className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{currency(metrics.unaccountedInputCosts)}</div>
+              <div className="text-2xl font-bold">{currency(metrics.inputCostTotal + metrics.inputCostDeductions)}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total PnL</CardTitle>
+              <CardTitle className="text-sm font-medium">Net PnL</CardTitle>
               <TrendingUp className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -224,9 +235,57 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Cattle Batches Section */}
+      <section className="mb-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Cattle Batches
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-32" />
+            ) : batches.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No cattle batches found</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Purchase Date</TableHead>
+                      <TableHead>Breed</TableHead>
+                      <TableHead>Price per Head</TableHead>
+                      <TableHead>Initial Quantity</TableHead>
+                      <TableHead>Current Quantity</TableHead>
+                      <TableHead>Avg Weight (kg)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {batches.map((batch) => (
+                      <TableRow key={batch.batch_id}>
+                        <TableCell>
+                          {new Date(batch.purchase_date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>{batch.breed || '-'}</TableCell>
+                        <TableCell>{currency(Number(batch.price_per_head || 0))}</TableCell>
+                        <TableCell>{batch.purchased_quantity}</TableCell>
+                        <TableCell>{batch.remaining_quantity}</TableCell>
+                        <TableCell>{batch.average_weight_kg ? `${Number(batch.average_weight_kg).toFixed(1)} kg` : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="rounded-lg border bg-card">
         <div className="p-4 border-b">
-          <h2 className="text-base font-semibold">Revenue, Purchases, Costs and Cumulative PnL</h2>
+          <h2 className="text-base font-semibold">Sales Revenue, Input Costs and Cumulative PnL</h2>
         </div>
         <div className="p-2">
           {loading ? (
@@ -240,13 +299,13 @@ export default function Dashboard() {
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
                     </linearGradient>
-                    <linearGradient id="fillPurchases" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--secondary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.05} />
-                    </linearGradient>
                     <linearGradient id="fillInputs" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.25} />
                       <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="fillDeductions" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -255,8 +314,8 @@ export default function Dashboard() {
                   <Tooltip />
                   <Legend />
                   <Area type="monotone" dataKey="sales" name="Sales" stroke="hsl(var(--primary))" fill="url(#fillSales)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="purchases" name="Purchases" stroke="hsl(var(--secondary))" fill="url(#fillPurchases)" strokeWidth={2} />
                   <Area type="monotone" dataKey="inputs" name="Input Costs" stroke="hsl(var(--destructive))" fill="url(#fillInputs)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="deductions" name="Cattle Cost Deductions" stroke="hsl(var(--muted-foreground))" fill="url(#fillDeductions)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
