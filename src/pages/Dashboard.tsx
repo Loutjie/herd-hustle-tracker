@@ -98,6 +98,29 @@ export default function Dashboard() {
     fetchData()
   }, [start, end])
 
+  const [allInputCosts, setAllInputCosts] = useState<any[]>([])
+  const [totalInputCostDeductions, setTotalInputCostDeductions] = useState(0)
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+      const [inputCostsRes, deductionsRes] = await Promise.all([
+        supabase
+          .from('input_costs')
+          .select('amount'),
+        supabase
+          .from('cattle_transactions')
+          .select('input_cost_deduction, type')
+          .eq('type', 'sell')
+      ])
+      
+      setAllInputCosts(inputCostsRes.data || [])
+      setTotalInputCostDeductions(
+        deductionsRes.data?.reduce((sum, t) => sum + Number(t.input_cost_deduction || 0), 0) || 0
+      )
+    }
+    fetchAllData()
+  }, [])
+
   const metrics = useMemo(() => {
     const buys = transactions.filter((t) => t.type === 'buy')
     const sells = transactions.filter((t) => t.type === 'sell')
@@ -106,16 +129,19 @@ export default function Dashboard() {
     const totalSoldHead = sells.reduce((sum, t) => sum + Number(t.quantity || 0), 0)
     const netCattle = totalPurchasedHead - totalSoldHead
 
-    // Only include cattle costs when cattle are sold (from sale_batch_allocations)
     const salesRevenue = sells.reduce((sum, t) => sum + Number(t.total_amount || 0), 0)
     const inputCostTotal = costs.reduce((sum, c) => sum + Number(c.amount || 0), 0)
     const inputCostDeductions = sells.reduce((sum, t) => sum + Number(t.input_cost_deduction || 0), 0)
+    
+    // Calculate total input costs across all time and unaccounted costs
+    const totalAllInputCosts = allInputCosts.reduce((sum, c) => sum + Number(c.amount || 0), 0)
+    const unaccountedInputCosts = totalAllInputCosts - totalInputCostDeductions
 
     // PnL only includes costs from input_costs and input_cost_deductions on sales
     const pnl = salesRevenue - inputCostTotal - inputCostDeductions
 
-    return { netCattle, salesRevenue, inputCostTotal, inputCostDeductions, pnl }
-  }, [transactions, costs])
+    return { netCattle, salesRevenue, inputCostTotal, inputCostDeductions, pnl, unaccountedInputCosts, totalAllInputCosts }
+  }, [transactions, costs, allInputCosts, totalInputCostDeductions])
 
   const chartData = useMemo(() => {
     const days = eachDayOfInterval({ start, end })
@@ -215,11 +241,14 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Input Costs</CardTitle>
+              <CardTitle className="text-sm font-medium">Unaccounted Input Costs</CardTitle>
               <Coins className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{currency(metrics.inputCostTotal + metrics.inputCostDeductions)}</div>
+              <div className="text-2xl font-bold">{currency(metrics.unaccountedInputCosts)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Total: {currency(metrics.totalAllInputCosts)} | Allocated: {currency(totalInputCostDeductions)}
+              </p>
             </CardContent>
           </Card>
 
